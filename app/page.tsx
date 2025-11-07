@@ -1,65 +1,216 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState } from "react";
+import { Container, Box, Paper, Typography } from "@mui/material";
+import ProductInput from "@/components/ProductInput";
+import ProgressIndicator from "@/components/ProgressIndicator";
+import IngredientsReview from "@/components/IngredientsReview";
+import ComplianceResults from "@/components/ComplianceResults";
+import ErrorDisplay from "@/components/ErrorDisplay";
+import { fetchProductPage } from "@/lib/fetchProduct";
+import { parseKokubuProduct } from "@/lib/parseProduct";
+import { analyzeWithGemini } from "@/lib/geminiApi";
+import { ProductData, AnalysisResult } from "@/lib/types";
 
 export default function Home() {
+  // Form inputs
+  const [productUrl, setProductUrl] = useState(
+    "https://www.kokubu.co.jp/brand/100/0317811.html"
+  );
+  const [apiKey, setApiKey] = useState("");
+
+  // State management
+  const [isLoading, setIsLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
+  const [showProgress, setShowProgress] = useState(false);
+  const [productData, setProductData] = useState<ProductData | null>(null);
+  const [showReview, setShowReview] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
+  const [showResults, setShowResults] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showError, setShowError] = useState(false);
+
+  /**
+   * Hide all sections
+   */
+  const hideAllSections = () => {
+    setShowProgress(false);
+    setShowReview(false);
+    setShowResults(false);
+    setShowError(false);
+  };
+
+  /**
+   * Show error message
+   */
+  const displayError = (message: string) => {
+    setError(message);
+    setShowError(true);
+    hideAllSections();
+  };
+
+  /**
+   * Step 1: Fetch and extract product information
+   */
+  const handleAnalyze = async () => {
+    // Validation
+    if (!productUrl || !apiKey) {
+      displayError("Please enter both a product URL and your API key.");
+      return;
+    }
+
+    // Reset state
+    setIsLoading(true);
+    hideAllSections();
+    setProductData(null);
+    setAnalysisResult(null);
+
+    try {
+      // Phase 1: Fetch product page
+      setProgressMessage("📥 Fetching product page...");
+      setShowProgress(true);
+      const html = await fetchProductPage(productUrl);
+
+      // Phase 2: Parse product information
+      setProgressMessage("🔍 Extracting product information and ingredients...");
+      const extractedData = parseKokubuProduct(html, productUrl);
+      setProductData(extractedData);
+
+      // Phase 3: Display for review
+      setProgressMessage(
+        "✓ Extraction complete! Please review the information below."
+      );
+
+      // Show review section after a brief delay
+      setTimeout(() => {
+        setShowProgress(false);
+        setShowReview(true);
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      displayError(
+        `Failed to extract product information: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Step 2: Confirm and analyze compliance with Gemini
+   */
+  const handleConfirmAnalysis = async () => {
+    if (!apiKey) {
+      displayError("API key is required.");
+      return;
+    }
+
+    if (!productData) {
+      displayError("No product data available. Please analyze a product first.");
+      return;
+    }
+
+    if (!productData.ingredients.trim()) {
+      displayError("Ingredients list cannot be empty.");
+      return;
+    }
+
+    // Show loading state
+    setIsLoading(true);
+    hideAllSections();
+
+    try {
+      // Phase 4: Analyze with Gemini
+      setProgressMessage("🤖 Analyzing ingredients against EU regulations...");
+      setShowProgress(true);
+
+      const result = await analyzeWithGemini(
+        productData.productName,
+        productData.ingredients,
+        apiKey
+      );
+
+      setAnalysisResult(result);
+      setShowProgress(false);
+      setShowResults(true);
+    } catch (err) {
+      console.error(err);
+      displayError(
+        `Analysis error: ${
+          err instanceof Error ? err.message : String(err)
+        }. Check the console for details.`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Update ingredients in product data
+   */
+  const handleIngredientsChange = (ingredients: string) => {
+    if (productData) {
+      setProductData({ ...productData, ingredients });
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <Box
+      sx={{
+        bgcolor: 'background.default',
+        minHeight: '100vh',
+        py: 8,
+      }}
+    >
+      <Container maxWidth="md">
+        <Paper
+          elevation={3}
+          sx={{
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          {/* Header */}
+          <Typography variant="h1" sx={{ mb: 1 }}>
+            EU Export Compliance AI (Demo)
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Enter a product URL to check its ingredients against EU regulations.
+          </Typography>
+
+          {/* Input Section */}
+          <ProductInput
+            productUrl={productUrl}
+            apiKey={apiKey}
+            isLoading={isLoading}
+            onProductUrlChange={setProductUrl}
+            onApiKeyChange={setApiKey}
+            onAnalyze={handleAnalyze}
+          />
+
+          {/* Progress Indicator */}
+          <ProgressIndicator message={progressMessage} show={showProgress} />
+
+          {/* Ingredients Review Section */}
+          <IngredientsReview
+            productName={productData?.productName || ""}
+            ingredients={productData?.ingredients || ""}
+            show={showReview}
+            onIngredientsChange={handleIngredientsChange}
+            onConfirm={handleConfirmAnalysis}
+          />
+
+          {/* Results Section */}
+          <ComplianceResults result={analysisResult} show={showResults} />
+
+          {/* Error Display */}
+          <ErrorDisplay error={error} show={showError} />
+        </Paper>
+      </Container>
+    </Box>
   );
 }
