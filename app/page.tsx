@@ -9,15 +9,18 @@ import ComplianceResults from "@/components/ComplianceResults";
 import ErrorDisplay from "@/components/ErrorDisplay";
 import { fetchProductPage } from "@/lib/fetchProduct";
 import { parseKokubuProduct } from "@/lib/parseProduct";
-import { analyzeWithGemini } from "@/lib/geminiApi";
+import { analyzeWithGeminiClient } from "@/lib/geminiClient";
+import { analyzeWithOpenAIClient } from "@/lib/openaiClient";
 import { ProductData, AnalysisResult } from "@/lib/types";
+
+type AIProvider = "gemini" | "openai";
 
 export default function Home() {
   // Form inputs
   const [productUrl, setProductUrl] = useState(
     "https://www.kokubu.co.jp/brand/100/0317811.html"
   );
-  const [apiKey, setApiKey] = useState("");
+  const [provider, setProvider] = useState<AIProvider>("gemini");
 
   // State management
   const [isLoading, setIsLoading] = useState(false);
@@ -56,8 +59,8 @@ export default function Home() {
    */
   const handleAnalyze = async () => {
     // Validation
-    if (!productUrl || !apiKey) {
-      displayError("Please enter both a product URL and your API key.");
+    if (!productUrl) {
+      displayError("Please enter a product URL.");
       return;
     }
 
@@ -72,6 +75,8 @@ export default function Home() {
       setProgressMessage("📥 Fetching product page...");
       setShowProgress(true);
       const html = await fetchProductPage(productUrl);
+
+      console.log("Fetched HTML:", html);
 
       // Phase 2: Parse product information
       setProgressMessage("🔍 Extracting product information and ingredients...");
@@ -101,14 +106,9 @@ export default function Home() {
   };
 
   /**
-   * Step 2: Confirm and analyze compliance with Gemini
+   * Step 2: Confirm and analyze compliance with selected AI provider
    */
   const handleConfirmAnalysis = async () => {
-    if (!apiKey) {
-      displayError("API key is required.");
-      return;
-    }
-
     if (!productData) {
       displayError("No product data available. Please analyze a product first.");
       return;
@@ -124,15 +124,24 @@ export default function Home() {
     hideAllSections();
 
     try {
-      // Phase 4: Analyze with Gemini
-      setProgressMessage("🤖 Analyzing ingredients against EU regulations...");
+      // Phase 4: Analyze with selected provider
+      const providerName = provider === "gemini" ? "Google Gemini" : "OpenAI GPT-4o";
+      setProgressMessage(`🤖 Analyzing with ${providerName} against EU regulations...`);
       setShowProgress(true);
 
-      const result = await analyzeWithGemini(
-        productData.productName,
-        productData.ingredients,
-        apiKey
-      );
+      let result: AnalysisResult;
+
+      if (provider === "gemini") {
+        result = await analyzeWithGeminiClient(
+          productData.productName,
+          productData.ingredients
+        );
+      } else {
+        result = await analyzeWithOpenAIClient(
+          productData.productName,
+          productData.ingredients
+        );
+      }
 
       setAnalysisResult(result);
       setShowProgress(false);
@@ -185,10 +194,10 @@ export default function Home() {
           {/* Input Section */}
           <ProductInput
             productUrl={productUrl}
-            apiKey={apiKey}
+            provider={provider}
             isLoading={isLoading}
             onProductUrlChange={setProductUrl}
-            onApiKeyChange={setApiKey}
+            onProviderChange={setProvider}
             onAnalyze={handleAnalyze}
           />
 

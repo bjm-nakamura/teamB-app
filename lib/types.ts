@@ -56,6 +56,51 @@ export interface GeminiErrorResponse {
 }
 
 /**
+ * OpenAI API response structure
+ */
+export interface OpenAIResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+/**
+ * Error response from OpenAI API
+ */
+export interface OpenAIErrorResponse {
+  error: {
+    message: string;
+    type: string;
+    param?: string;
+    code?: string;
+  };
+}
+
+/**
+ * EU Reference data fetched from regulation URLs
+ */
+export interface EUReference {
+  url: string;
+  title: string;
+  content: string;
+  fetchedAt: Date;
+}
+
+/**
  * Progress stage types
  */
 export type ProgressStage =
